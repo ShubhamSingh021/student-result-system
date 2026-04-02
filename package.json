@@ -1,0 +1,12 @@
+{
+  "name": "rtu-result-monorepo",
+  "version": "1.0.0",
+  "description": "RTU Student Result Portal - Unified Deployment",
+  "scripts": {
+    "start": "node backend/server.js",
+    "install-backend": "npm install --prefix backend",
+    "dev": "npm run dev --prefix backend"
+  },
+  "author": "Shubham Singh",
+  "license": "ISC"
+}
