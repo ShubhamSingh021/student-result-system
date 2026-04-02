@@ -8,5 +8,8 @@
     "dev": "npm run dev --prefix backend"
   },
   "author": "Shubham Singh",
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {
+    "run-script": "^0.1.1"
+  }
 }

@@ -1,0 +1,353 @@
+﻿commit 8d941399a6524188926db307db764437f87bb186
+Author: ShubhamSingh021 <singhshubham21112003@gmail.com>
+Date:   Thu Apr 2 01:14:06 2026 +0530
+
+    fix: update search hint text; restore credit-weighted SGPA formula
+
+diff --git a/css/style.css b/css/style.css
+index 662c48e..8af36c7 100644
+--- a/css/style.css
++++ b/css/style.css
+@@ -51,6 +51,22 @@
+   --glow:      0 0 24px rgba(79,126,248,0.3);
+ }
+ 
++/* Print / PDF Utilities */
++.no-print { display: none !important; }
++
++/* Force dark theme properties for PDF capture */
++#result-card {
++  background-color: #0d121f !important;
++  color: #e8edf8 !important;
++  -webkit-print-color-adjust: exact !important; 
++  print-color-adjust: exact !important;
++}
++
++@media print {
++  .no-print { display: none !important; }
++}
++
++
+ /* ΓöÇΓöÇ Reset ΓöÇΓöÇ */
+ *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+ html { scroll-behavior: smooth; }
+@@ -533,13 +549,16 @@ body {
+ .sgpa-block { display: flex; align-items: baseline; gap: 0.35rem; }
+ .sgpa-label { font-size: 0.72rem; color: var(--text-3); }
+ .sgpa-val { font-size: 1.75rem; font-weight: 800; font-family: var(--mono); color: var(--primary); line-height: 1; }
++
+ .backlog-tag {
++
+   font-size: 0.72rem; font-weight: 600;
+   padding: 0.25rem 0.6rem;
+   border-radius: var(--r-full);
+   background: var(--warn-bg); color: var(--warn); border: 1px solid var(--warn-border);
+ }
+ 
++
+ /* Meta Bar */
+ .meta-bar {
+   display: flex; justify-content: space-between; align-items: center;
+diff --git a/index.html b/index.html
+index 11e09b3..a7e44b2 100644
+--- a/index.html
++++ b/index.html
+@@ -11,6 +11,7 @@
+   <link rel="stylesheet" href="css/style.css" />
+   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
++  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+ </head>
+ <body>
+ 
+@@ -64,7 +65,7 @@
+             <div class="btn-spinner hidden" id="searchSpinner"></div>
+           </button>
+         </div>
+-        <p class="hint">Auto-fetches from SOJI system using stored student data</p>
++        <p class="hint">Auto-fetches from SOJI system</p>
+       </section>
+ 
+       <!-- Browse by Section -->
+@@ -162,7 +163,7 @@
+       </div>
+ 
+       <!-- Result Card -->
+-      <div class="result-card hidden" id="resultCard">
++      <div class="result-card hidden" id="result-card">
+ 
+         <!-- Profile Header -->
+         <div class="profile-header">
+@@ -198,6 +199,7 @@
+             </div>
+             <div class="backlog-tag hidden" id="backlogTag">0 Backlogs</div>
+           </div>
++
+         </div>
+ 
+         <!-- Source Meta -->
+@@ -240,7 +242,7 @@
+             <span class="final-value" id="finalResult">ΓÇö</span>
+             <span class="backlog-final hidden" id="backlogFinal"></span>
+           </div>
+-          <div class="action-btns">
++          <div class="action-btns no-print">
+             <button class="btn btn-primary" onclick="downloadPDF()" id="downloadBtn">
+               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+               Download PDF
+@@ -272,7 +274,8 @@
+   <!-- Toast -->
+   <div class="toast hidden" id="toast"></div>
+ 
+-  <script src="js/ui.js"></script>
+-  <script src="js/app.js"></script>
++  <script src="js/ui.js?v=1.3.0"></script>
++  <script src="js/app.js?v=1.3.0"></script>
+ </body>
+ </html>
++
+diff --git a/js/ui.js b/js/ui.js
+index aea988a..5fcc820 100644
+--- a/js/ui.js
++++ b/js/ui.js
+@@ -3,7 +3,7 @@
+ const views = {
+   empty:   () => document.getElementById('emptyState'),
+   loading: () => document.getElementById('loadingState'),
+-  result:  () => document.getElementById('resultCard'),
++  result:  () => document.getElementById('result-card'),
+   error:   () => document.getElementById('errorCard'),
+ };
+ 
+@@ -142,6 +142,7 @@ function renderResult(data) {
+   // SGPA
+   setMultiTxt(['sgpaValue', 'displaySgpa'], data.sgpa || '0.00');
+ 
++
+   // Backlogs
+   const tag = document.getElementById('backlogTag');
+   if (data.backlogs > 0) {
+@@ -208,147 +209,94 @@ function renderResult(data) {
+   views.result().classList.remove('hidden');
+ }
+ 
+-// ΓöÇΓöÇ PDF Download via jsPDF ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
++// ΓöÇΓöÇ EXPERT UI CAPTURE: downloadPDF ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
++// Captures the #result-card element exactly as it appears (Dark Theme, Gradients, etc.)
++// and converts it into a high-quality multi-page PDF.
+ 
+-function downloadPDF() {
+-  if (!currentResult) {
+-    showToast('No result data to download!', 'error');
++async function downloadPDF() {
++  const element = document.getElementById('result-card');
++  if (!element) {
++    showToast('Result card not found', 'error');
+     return;
+   }
+ 
+-  try {
+-    // 1. Robust initialization for different jsPDF versions
+-    let jsPDF;
+-    if (window.jspdf && window.jspdf.jsPDF) {
+-      jsPDF = window.jspdf.jsPDF;
+-    } else if (window.jsPDF) {
+-      jsPDF = window.jsPDF;
+-    } else {
+-      throw new Error('jsPDF library not loaded correctly.');
+-    }
++  // Get student details for naming
++  const rollNo = document.getElementById('displayRollNo')?.textContent.trim() || 'Result';
++  const nameElement = document.getElementById('studentName');
++  const studentName = nameElement?.textContent.trim() || 'Student';
++  const fileName = `${rollNo}_${studentName.replace(/\s+/g, '_')}_Result_Soji.pdf`;
+ 
+-    const doc  = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+-    const data = currentResult;
+-    const pageW = doc.internal.pageSize.getWidth();
+-
+-    // ΓöÇΓöÇ Header band ΓöÇΓöÇ
+-    doc.setFillColor(18, 30, 60);
+-    doc.rect(0, 0, pageW, 38, 'F');
+-
+-    doc.setTextColor(255, 255, 255);
+-    doc.setFontSize(16); doc.setFont('helvetica', 'bold');
+-    doc.text('Rajasthan Technical University', pageW / 2, 14, { align: 'center' });
+-    doc.setFontSize(11); doc.setFont('helvetica', 'normal');
+-    doc.text('Student Mark Sheet ΓÇö B.Tech Semester V (2025-26)', pageW / 2, 22, { align: 'center' });
+-
+-    doc.setFontSize(8);
+-    doc.setTextColor(160, 180, 220);
+-    doc.text(`Generated: ${new Date().toLocaleString('en-IN')}`, pageW / 2, 30, { align: 'center' });
+-
+-    // ΓöÇΓöÇ Student Details ΓöÇΓöÇ
+-    const infoY = 46;
+-    doc.setDrawColor(220, 228, 245);
+-    doc.rect(14, infoY - 5, pageW - 28, 38);
+-
+-    doc.setTextColor(60, 80, 130);
+-    doc.setFontSize(9); doc.setFont('helvetica', 'bold');
+-    doc.text('STUDENT INFORMATION', 18, infoY + 2);
+-
+-    doc.setTextColor(30, 30, 30);
+-    doc.setFontSize(10); doc.setFont('helvetica', 'normal');
+-
+-    const col1x = 18, col2x = pageW / 2 + 5;
+-    let iy = infoY + 10;
+-    const row = (label, val, x) => {
+-      doc.setFont('helvetica', 'bold'); doc.text(`${label}:`, x, iy);
+-      doc.setFont('helvetica', 'normal'); doc.text(String(val || 'ΓÇö'), x + 36, iy);
+-    };
+-
+-    row('Name',    data.name || data.studentName, col1x);
+-    row('Roll No', data.rollNo || data.rollNumber,      col2x);
+-    iy += 8;
+-    row("Father's Name", data.fatherName, col1x);
+-    row("Mother's Name", data.motherName, col2x);
+-    iy += 8;
+-    row('Section', data.section ? `Section ${data.section}` : 'ΓÇö', col1x);
+-
+-    // Result + SGPA chips
+-    const res = (data.result || '').toUpperCase();
+-    const isPass = res === 'PASS';
+-    doc.setFillColor(...(isPass ? [220, 255, 235] : [255, 225, 225]));
+-    doc.rect(col2x, iy - 6, 40, 10, 'F');
+-    doc.setTextColor(...(isPass ? [20, 160, 80] : [200, 20, 50]));
+-    doc.setFontSize(11); doc.setFont(undefined, 'bold');
+-    doc.text(res, col2x + 20, iy + 1, { align: 'center' });
+-
+-    // ΓöÇΓöÇ Subject Table ΓöÇΓöÇ
+-    const tStartY = infoY + 44;
+-    if (data.subjects && data.subjects.length > 0) {
+-      const tableBody = data.subjects.map((s, i) => [
+-        i + 1,
+-        s.title   || 'ΓÇö',
+-        s.code    || 'ΓÇö',
+-        s.midMarks ?? 'ΓÇö',
+-        s.endMarks ?? 'ΓÇö',
+-        s.grade   || 'ΓÇö',
+-        s.grade === 'F' ? 'FAIL' : 'PASS'
+-      ]);
+-
+-      // Robust check for autoTable
+-      if (typeof doc.autoTable !== 'function') {
+-        throw new Error('PDF Table Plugin (autoTable) is not loaded.');
++  try {
++    showToast('≡ƒô╕ Capturing HD Marksheet...', 'info');
++    
++    // 1. Capture with html2canvas (HD scale: 3 for maximum clarity)
++    const canvas = await html2canvas(element, {
++      scale: 3, // Premium quality
++      useCORS: true,
++      logging: false,
++      backgroundColor: '#0d121f', // Match portal theme
++      scrollX: 0,
++      scrollY: -window.scrollY, // Fix position issues
++      onclone: (clonedDoc) => {
++        const clonedEl = clonedDoc.getElementById('result-card');
++        clonedEl.style.display = 'block';
++        clonedEl.style.visibility = 'visible';
++        clonedEl.classList.remove('hidden');
++        
++        // Hide UI buttons in the captured clone
++        clonedDoc.querySelectorAll('.no-print').forEach(el => {
++          el.style.display = 'none';
++        });
+       }
++    });
+ 
+-      doc.autoTable({
+-        startY: tStartY,
+-        head: [['#', 'Course Title', 'Code', 'Mid', 'End', 'Grade', 'Status']],
+-        body: tableBody,
+-        theme: 'grid',
+-        styles: { fontSize: 9, cellPadding: 3.5, font: 'helvetica' },
+-        headStyles: { fillColor: [30, 55, 120], textColor: 255, fontStyle: 'bold', fontSize: 8.5 },
+-        columnStyles: {
+-          0: { cellWidth: 10, halign: 'center' },
+-          2: { cellWidth: 26, halign: 'center', fontStyle: 'bold' },
+-          3: { cellWidth: 18, halign: 'center' },
+-          4: { cellWidth: 18, halign: 'center' },
+-          5: { cellWidth: 18, halign: 'center', fontStyle: 'bold' },
+-          6: { cellWidth: 22, halign: 'center' }
+-        },
+-        didParseCell(d) {
+-          if (d.section === 'body') {
+-            if (d.column.index === 5 && d.cell.raw === 'F') {
+-              d.cell.styles.textColor = [200, 20, 50];
+-            }
+-            if (d.column.index === 6) {
+-              d.cell.styles.textColor = d.cell.raw === 'FAIL' ? [200, 20, 50] : [20, 160, 80];
+-            }
+-          }
+-        }
+-      });
++    const imgData = canvas.toDataURL('image/png', 1.0);
++    
++    // 2. Setup jsPDF (A4 size: 210mm x 297mm)
++    const { jsPDF } = window.jspdf;
++    const pdf = new jsPDF({
++      orientation: 'p',
++      unit: 'mm',
++      format: 'a4',
++      compress: true
++    });
++    
++    const pdfWidth = pdf.internal.pageSize.getWidth();
++    const pdfHeight = pdf.internal.pageSize.getHeight();
++    
++    // 3. Image dimensions relative to PDF
++    const imgProps = pdf.getImageProperties(imgData);
++    const imgWidth = pdfWidth; 
++    const imgHeight = (imgProps.height * imgWidth) / imgProps.width;
++    
++    // 4. Multi-page Pagination Logic
++    let heightLeft = imgHeight;
++    let position = 0;
++    
++    // Handle first page
++    pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
++    heightLeft -= pdfHeight;
++
++    // Handle remaining pages with offset
++    while (heightLeft > 0) {
++      position = heightLeft - imgHeight;
++      pdf.addPage();
++      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight, undefined, 'FAST');
++      heightLeft -= pdfHeight;
+     }
+ 
+-    // ΓöÇΓöÇ Footer ΓöÇΓöÇ
+-    const finalY = doc.lastAutoTable ? doc.lastAutoTable.finalY + 10 : tStartY + 10;
+-    doc.setFillColor(245, 248, 255);
+-    doc.rect(14, finalY, pageW - 28, 16, 'F');
+-    doc.setFontSize(10); doc.setFont('helvetica', 'bold');
+-    doc.setTextColor(...(isPass ? [20, 160, 80] : [200, 20, 50]));
+-    doc.text(`Overall Result: ${res}  |  SGPA: ${data.sgpa || 'N/A'}  |  Backlogs: ${data.backlogs || 0}`, pageW / 2, finalY + 10, { align: 'center' });
+-
+-    doc.setFontSize(7.5); doc.setTextColor(160);
+-    doc.text('This is a computer-generated sheet. For official result, visit official portal.', pageW / 2, finalY + 22, { align: 'center' });
+-
+-    // Use current date/roll for filename
+-    const filename = `SOJI_Result_${data.rollNo || data.rollNumber || 'Result'}_SemV.pdf`;
+-    doc.save(filename);
+-    showToast('PDF downloaded successfully!', 'success');
+-
+-  } catch (err) {
+-    console.error('PDF Generation Error:', err);
+-    showToast(`PDF Error: ${err.message}`, 'error');
++    // 5. Final Download
++    pdf.save(fileName);
++    showToast('Γ£à HD PDF Saved Successfully!', 'success');
++
++  } catch (error) {
++    console.error('PDF Capture Error:', error);
++    showToast(`PDF Error: ${error.message}`, 'error');
+   }
+ }
+ 
++
++
+ // ΓöÇΓöÇ Toast ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+ 
+ let _toastTimer = null;
